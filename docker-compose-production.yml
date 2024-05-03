@@ -1,0 +1,28 @@
+version: "3.8"
+
+networks:
+  default:
+    name: typingrealm
+
+services:
+  kartman:
+    image: ${DOCKER_REGISTRY-}kartman
+    container_name: kartman
+    build:
+      context: .
+      dockerfile: KartMan.Host/Dockerfile
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 750m
+    volumes:
+      - ./prod-data.db:/app/data.db
+
+  kartman-ui:
+    image: ${DOCKER_REGISTRY-}kartman-ui
+    container_name: kartman-ui
+    build:
+      context: frontend/.
+      dockerfile: Dockerfile-production
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 750m
