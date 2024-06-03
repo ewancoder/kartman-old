@@ -157,12 +157,15 @@ async function updateTrackConfig(sessionId) {
 
 
 async function reload() {
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for styles to load.
     element.innerHTML = '';
     let session = undefined;
     let kart = undefined;
     let fastest = undefined;
+    console.log(json);
+
+    const shadowDom = document.createElement('div');
     for (const e of json) {
+        const groupElement = document.createElement('div');
         if (session != e.session) {
             session = e.session;
 
@@ -230,7 +233,7 @@ async function reload() {
 
             headerArea.appendChild(sessionHeader);
             headerArea.appendChild(dataElement);
-            element.appendChild(headerArea);
+            groupElement.appendChild(headerArea);
         }
 
         if (kart != e.kart) {
@@ -240,7 +243,7 @@ async function reload() {
             const kartHeader = document.createElement('h3');
             kartHeader.innerHTML = `Kart ${kart}`;
             kartHeader.classList.add('kart-header');
-            element.appendChild(kartHeader);
+            groupElement.appendChild(kartHeader);
         }
 
         const lapLine = document.createElement('p');
@@ -252,8 +255,16 @@ async function reload() {
         }
         lapLine.innerHTML = `${e.lap} - ${e.time}`;
         lapLine.classList.add('lap-line');
-        element.appendChild(lapLine);
+        groupElement.appendChild(lapLine);
+
+        shadowDom.appendChild(groupElement);
     }
 
     if (fastest) fastest.lapLine.classList.add('fastest');
+
+    // Super mega hack to make it work.
+    element.appendChild(shadowDom);
+    document.getElementById('main').classList.add('hidden');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    document.getElementById('main').classList.remove('hidden');
 }

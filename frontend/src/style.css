@@ -67,6 +67,10 @@ td {
     height: 38px;
 }
 
+.hidden {
+    display: none;
+}
+
 @media (max-width: 1000px) {
     .session-info {
         margin-left: 30px;
