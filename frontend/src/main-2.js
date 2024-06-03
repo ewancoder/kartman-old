@@ -266,5 +266,6 @@ async function reload() {
     element.appendChild(shadowDom);
     document.getElementById('main').classList.add('hidden');
     await new Promise(resolve => setTimeout(resolve, 1000));
+    document.getElementById('loading').remove();
     document.getElementById('main').classList.remove('hidden');
 }
