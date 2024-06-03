@@ -639,26 +639,6 @@ public sealed class HistoryDataCollectorService : IHostedService
     {
         try
         {
-            await _repository.SaveLapAsync(DateOnly.FromDateTime(DateTime.UtcNow),
-            new LapEntry(
-                DateTime.UtcNow,
-                12,
-                "20",
-                "10",
-                8,
-                100.2m));
-
-            var rand = new Random();
-            await _repository.SaveLapAsync(DateOnly.FromDateTime(DateTime.UtcNow),
-            new LapEntry(
-                DateTime.UtcNow,
-                Convert.ToInt32(rand.Next(10, 20)),
-                "20",
-                rand.Next(8, 15).ToString(),
-                rand.Next(21, 30),
-                rand.Next(100, 300) / 70m));
-            return;
-
             var response = await _http.GetAsync("https://kart-timer.com/drivers/ajax.php?p=livescreen&track=110&target=updaterace");
             response.EnsureSuccessStatusCode();
 

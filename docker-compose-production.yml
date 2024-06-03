@@ -17,7 +17,7 @@ services:
     volumes:
       - ./prod-data.db:/app/data.db
       - ./prod-weather.db:/app/weather.db
-    env:
+    env_file:
       - secrets.env
 
   kartman-ui:
