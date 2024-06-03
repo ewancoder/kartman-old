@@ -161,7 +161,6 @@ async function reload() {
     let session = undefined;
     let kart = undefined;
     let fastest = undefined;
-    console.log(json);
 
     const shadowDom = document.createElement('div');
     for (const e of json) {
