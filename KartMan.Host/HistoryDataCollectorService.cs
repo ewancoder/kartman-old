@@ -17,6 +17,11 @@ public sealed record LapEntry(
     decimal time)
 {
     public ComparisonEntry ToComparisonEntry() => new(DateOnly.FromDateTime(recordedAtUtc), session, kart, lap);
+
+    public string GetSessionIdentifier()
+    {
+        return $"{DateOnly.FromDateTime(recordedAtUtc).DayNumber}-{session}";
+    }
 }
 
 public sealed record RawJson(
@@ -32,6 +37,52 @@ public sealed class HistoryDataRepository
     private const string DbConnectionString = "Data Source=data.db";
     public const decimal FastestAllowedTime = 0; // This setting is futile, there will always be skewed times.
     private readonly HashSet<ComparisonEntry> _cache = new HashSet<ComparisonEntry>();
+
+    public async Task UpdateDatabaseAsync()
+    {
+        try
+        {
+            using (var connection = new SqliteConnection(DbConnectionString))
+            {
+                await connection.OpenAsync();
+
+                var command = connection.CreateCommand();
+                command.CommandText =
+                @"
+ALTER TABLE data ADD COLUMN session_id TEXT;
+CREATE INDEX idx_data_session_id ON data (session_id);";
+                await command.ExecuteNonQueryAsync();
+            }
+
+            using (var connection = new SqliteConnection(DbConnectionString))
+            {
+                await connection.OpenAsync();
+
+                var command = connection.CreateCommand();
+                command.CommandText =
+                @"
+CREATE TABLE session (
+    id TEXT,
+    weather INTEGER,
+    sky INTEGER,
+    wind INTEGER,
+    air_temp decimal(6,3),
+    track_temp decimal(6,3),
+    track_temp_approximation INTEGER);
+
+CREATE UNIQUE INDEX idx_session_id ON session (id);
+CREATE INDEX idx_session_weather ON session (weather);
+CREATE INDEX idx_session_sky ON session (sky);
+CREATE INDEX idx_session_wind ON session (wind);
+CREATE INDEX idx_session_air_temp ON session (air_temp);
+CREATE INDEX idx_session_track_temp ON session (track_temp);
+CREATE INDEX idx_session_track_temp_approximation ON session (track_temp_approximation);
+";
+                await command.ExecuteNonQueryAsync();
+            }
+        }
+        catch { }
+    }
 
     public async Task<IEnumerable<LapEntry>> GetHistoryForDayAsync(DateOnly day)
     {
@@ -131,9 +182,10 @@ public sealed class HistoryDataRepository
             var command = connection.CreateCommand();
             command.CommandText =
             @"
-                INSERT OR IGNORE INTO data (day, recorded_at_utc, session, total_length, kart, lap, time)
-                VALUES (DATE($recordedAtUtc), $recordedAtUtc, $session, $totalLength, $kart, $lap, $time)
+                INSERT OR IGNORE INTO data (session_id, day, recorded_at_utc, session, total_length, kart, lap, time)
+                VALUES ($sessionId, DATE($recordedAtUtc), $recordedAtUtc, $session, $totalLength, $kart, $lap, $time)
             ";
+            command.Parameters.AddWithValue("$sessionId", entry.GetSessionIdentifier());
             command.Parameters.AddWithValue("$recordedAtUtc", entry.recordedAtUtc);
             command.Parameters.AddWithValue("$session", entry.session);
             command.Parameters.AddWithValue("$totalLength", entry.totalLength);
@@ -145,6 +197,161 @@ public sealed class HistoryDataRepository
         }
 
         _cache.Add(entry.ToComparisonEntry());
+    }
+
+    public async Task UpdateSessionInfoAsync(string sessionId, SessionInfo info)
+    {
+        if (!info.IsValid)
+            throw new InvalidOperationException();
+
+        using (var connection = new SqliteConnection(DbConnectionString))
+        {
+            await connection.OpenAsync();
+
+            var command = connection.CreateCommand();
+
+            var cmdText = "INSERT OR IGNORE INTO session (id, ";
+            var values = "VALUES ($id, ";
+            command.Parameters.AddWithValue("$id", sessionId);
+
+            if (info.Weather != null)
+            {
+                cmdText += "weather, ";
+                values += "$weather, ";
+                command.Parameters.AddWithValue("$weather", info.Weather);
+            }
+
+            if (info.Sky != null)
+            {
+                cmdText += "sky, ";
+                values += "$sky, ";
+                command.Parameters.AddWithValue("$sky", info.Sky);
+            }
+
+            if (info.Wind != null)
+            {
+                cmdText += "wind, ";
+                values += "$wind, ";
+                command.Parameters.AddWithValue("$wind", info.Wind);
+            }
+
+            if (info.AirTempC != null)
+            {
+                cmdText += "air_temp, ";
+                values += "$airTemp, ";
+                command.Parameters.AddWithValue("$airTemp", info.AirTempC);
+            }
+
+            if (info.TrackTempC != null)
+            {
+                cmdText += "track_temp, ";
+                values += "$trackTemp, ";
+                command.Parameters.AddWithValue("$trackTemp", info.TrackTempC);
+            }
+
+            if (info.TrackTempApproximation != null)
+            {
+                cmdText += "track_temp_approximation, ";
+                values += "$trackTempApproximation, ";
+                command.Parameters.AddWithValue("$trackTempApproximation", info.TrackTempApproximation);
+            }
+
+            cmdText = $"{cmdText[..^2]}) {values[..^2]});";
+
+            command.CommandText = cmdText;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        using (var connection = new SqliteConnection(DbConnectionString))
+        {
+            await connection.OpenAsync();
+
+            var command = connection.CreateCommand();
+
+            var cmdText = "UPDATE session SET ";
+            command.Parameters.AddWithValue("$id", sessionId);
+
+            if (info.Weather != null)
+            {
+                cmdText += "weather = $weather, ";
+                command.Parameters.AddWithValue("$weather", info.Weather);
+            }
+
+            if (info.Sky != null)
+            {
+                cmdText += "sky = $sky, ";
+                command.Parameters.AddWithValue("$sky", info.Sky);
+            }
+
+            if (info.Wind != null)
+            {
+                cmdText += "wind = $wind, ";
+                command.Parameters.AddWithValue("$wind", info.Wind);
+            }
+
+            if (info.AirTempC != null)
+            {
+                cmdText += "air_temp = $airTemp, ";
+                command.Parameters.AddWithValue("$airTemp", info.AirTempC);
+            }
+
+            if (info.TrackTempC != null)
+            {
+                cmdText += "track_temp = $trackTemp, ";
+                command.Parameters.AddWithValue("$trackTemp", info.TrackTempC);
+            }
+
+            if (info.TrackTempApproximation != null)
+            {
+                cmdText += "track_temp_approximation = $trackTempApproximation, ";
+                command.Parameters.AddWithValue("$trackTempApproximation", info.TrackTempApproximation);
+            }
+
+            cmdText = $"{cmdText[..^2]} WHERE id = $id;";
+
+            command.CommandText = cmdText;
+            try
+            {
+                await command.ExecuteNonQueryAsync();
+            } catch (Exception e) { }
+        }
+    }
+
+    public async Task<SessionInfo> GetSessionInfoAsync(string sessionId)
+    {
+        using (var connection = new SqliteConnection(DbConnectionString))
+        {
+            await connection.OpenAsync();
+
+            var command = connection.CreateCommand();
+            command.CommandText =
+            @"
+                SELECT id, weather, sky, wind, air_temp, track_temp, track_temp_approximation
+                FROM session
+                WHERE id = $id
+            ";
+            command.Parameters.AddWithValue("$id", sessionId);
+
+            var list = new List<LapEntry>();
+            using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    Weather? weather = reader.IsDBNull(1) ? null : (Weather)reader.GetInt32(1);
+                    Sky? sky = reader.IsDBNull(2) ? null : (Sky)reader.GetInt32(2);
+                    Wind? wind = reader.IsDBNull(3) ? null : (Wind)reader.GetInt32(3);
+                    decimal? airTemp = reader.IsDBNull(4) ? null : reader.GetDecimal(4);
+                    decimal? trackTemp = reader.IsDBNull(5) ? null : reader.GetDecimal(5);
+                    TrackTemp? trackTempApproximation = reader.IsDBNull(6) ? null : (TrackTemp)reader.GetInt32(6);
+
+                    return new SessionInfo(weather, sky, wind, airTemp, trackTemp,
+                        trackTempApproximation);
+                }
+            }
+
+            return null;
+        }
+
     }
 }
 
@@ -173,13 +380,13 @@ public sealed class HistoryDataCollectorService : IHostedService
         {
             while (true)
             {
-                if ((DateTime.UtcNow.Hour < StartTimeHourUtc || DateTime.UtcNow.Hour >= EndTimeHourUtc)
+                /*if ((DateTime.UtcNow.Hour < StartTimeHourUtc || DateTime.UtcNow.Hour >= EndTimeHourUtc)
                     && DateTime.UtcNow - _lastTelemetryRecordedAtUtc > TimeSpan.FromHours(1.5))
                 {
                     _dayEnded = true;
                     await Task.Delay(TimeSpan.FromMinutes(5));
                     continue;
-                }
+                }*/
 
                 if (!_isRunning)
                     return;

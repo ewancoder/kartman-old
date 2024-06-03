@@ -17,6 +17,19 @@ builder.Services.AddCors(x =>
 var app = builder.Build();
 
 var repository = app.Services.GetRequiredService<HistoryDataRepository>();
+await repository.UpdateDatabaseAsync();
+
+app.MapPut("/api/sessions/{session}", async (string session, SessionInfo info) =>
+{
+    await repository.UpdateSessionInfoAsync(session, info);
+});
+
+app.MapGet("/api/sessions/{session}", async (string session) =>
+{
+    return await repository.GetSessionInfoAsync(session);
+});
+
+
 
 app.MapGet("/api/history/today", async () =>
 {
@@ -51,3 +64,44 @@ app.MapGet("/api/history/{dateString}", async (string dateString) =>
 app.UseCors("Cors");
 
 await app.RunAsync();
+
+public enum Weather
+{
+    Dry = 1,
+    Damp,
+    Wet,
+    ExtraWet
+}
+
+public enum Sky
+{
+    Clear = 1,
+    Cloudy,
+    Overcast
+}
+
+public enum Wind
+{
+    NoWind = 1,
+    Yes = 2
+}
+
+public enum TrackTemp
+{
+    Cold = 1,
+    Cool,
+    Warm,
+    Hot
+}
+
+public record SessionInfo(
+    Weather? Weather,
+    Sky? Sky,
+    Wind? Wind,
+    decimal? AirTempC,
+    decimal? TrackTempC,
+    TrackTemp? TrackTempApproximation)
+{
+    public bool IsValid => Weather != null || Sky != null || Wind != null || AirTempC != null || TrackTempC != null
+        || TrackTempApproximation != null;
+}
