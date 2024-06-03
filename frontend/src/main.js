@@ -223,8 +223,13 @@ async function reload() {
                 sessionHeader.innerHTML = `Session ${session} - ${new Date(e.recordedAtUtc+"Z").toLocaleTimeString()} - ${e.totalLength}`;
             }
             sessionHeader.classList.add('session-header');
-            element.appendChild(sessionHeader);
-            element.appendChild(dataElement);
+
+            const headerArea = document.createElement('div');
+            headerArea.classList.add('header-area');
+
+            headerArea.appendChild(sessionHeader);
+            headerArea.appendChild(dataElement);
+            element.appendChild(headerArea);
         }
 
         if (kart != e.kart) {

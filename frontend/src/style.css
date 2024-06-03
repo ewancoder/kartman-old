@@ -5,8 +5,15 @@ body {
     font-size: 1rem;
 }
 
+.header-area {
+    margin: 80 0 15 0;
+    padding: 10px;
+    background-color: #dff;
+    border-top: 1px solid #777;
+}
+
 .session-header {
-    margin: 35px 20px 5px;
+    margin: 30px 20px 5px;
     color: red;
 }
 
@@ -36,13 +43,14 @@ body {
 
 .session-info {
     margin-left: 30px;
-    font-size: 1.3rem;
+    font-size: 1.2rem;
+    font-weight: bold;
     color: #384;
 }
 
 td {
-    width: 150px;
-    height: 45px;
+    width: 250px;
+    height: 40px;
 }
 
 .interactive {
@@ -54,13 +62,32 @@ td {
 }
 
 .status {
-    padding: 5px;
-    width: 40px;
-    height: 40px;
+    padding: 2px;
+    width: 38px;
+    height: 38px;
 }
 
 @media (max-width: 1000px) {
-    body {
+    .session-info {
+        margin-left: 30px;
+        font-size: 1.9rem;
+        font-weight: bold;
+        color: #384;
+    }
+
+    td {
+        width: 250px;
+        height: 60px;
+    }
+
+    .status {
+        padding: 2px;
+        width: 58px;
+        height: 58px;
+    }
+}
+
+    /*body {
         font-size: 2rem;
     }
 
@@ -85,6 +112,6 @@ td {
     }
 
     .fastest {
-        font-size: 2.5rem;
+        font-size: 2rem;
     }
-}
+}*/
