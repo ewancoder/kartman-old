@@ -350,40 +350,44 @@ CREATE INDEX idx_session_track_config ON session (track_config);
         if (_cache.Contains(entry.ToComparisonEntry()))
             return;
 
-        if (!_savedSessions.Contains(entry.GetSessionIdentifier()))
+        try
         {
-            await _lock.WaitAsync();
-            try
+            if (!_savedSessions.Contains(entry.GetSessionIdentifier()))
             {
-                if (!_savedSessions.Contains(entry.GetSessionIdentifier()))
+                await _lock.WaitAsync();
+                try
                 {
-                    var weather = await _weatherStore.GetWeatherForAsync(entry.recordedAtUtc);
-                    if (weather != null)
+                    if (!_savedSessions.Contains(entry.GetSessionIdentifier()))
                     {
-                        var info = new SessionInfo(
-                            weather.PrecipitationMm > 2 ? Weather.Wet : (
-                                weather.PrecipitationMm > 1 ? Weather.Damp : Weather.Dry),
-                            weather.Cloud < 15 ? Sky.Clear : (
-                                weather.Cloud < 70 ? Sky.Cloudy : Sky.Overcast),
-                            weather.WindKph < 15 ? Wind.NoWind : Wind.Yes,
-                            weather.TempC,
-                            null,
-                            null,
-                            null);
+                        var weather = await _weatherStore.GetWeatherForAsync(entry.recordedAtUtc);
+                        if (weather != null)
+                        {
+                            var info = new SessionInfo(
+                                weather.PrecipitationMm > 2 ? Weather.Wet : (
+                                    weather.PrecipitationMm > 1 ? Weather.Damp : Weather.Dry),
+                                weather.Cloud < 15 ? Sky.Clear : (
+                                    weather.Cloud < 70 ? Sky.Cloudy : Sky.Overcast),
+                                weather.WindKph < 15 ? Wind.NoWind : Wind.Yes,
+                                weather.TempC,
+                                null,
+                                null,
+                                null);
 
-                        await UpdateSessionInfoAsync(entry.GetSessionIdentifier(), info);
+                            await UpdateSessionInfoAsync(entry.GetSessionIdentifier(), info);
+                        }
+
+                        // TODO: Clear them some time like once a day.
+                        // Mark it as saved even when no weather data is available. Can't do anything for older sessions.
+                        _savedSessions.Add(entry.GetSessionIdentifier());
                     }
-
-                    // TODO: Clear them some time like once a day.
-                    // Mark it as saved even when no weather data is available. Can't do anything for older sessions.
-                    _savedSessions.Add(entry.GetSessionIdentifier());
+                }
+                finally
+                {
+                    _lock.Release();
                 }
             }
-            finally
-            {
-                _lock.Release();
-            }
         }
+        catch { }
 
         using (var connection = new SqliteConnection(DbConnectionString))
         {
@@ -635,6 +639,26 @@ public sealed class HistoryDataCollectorService : IHostedService
     {
         try
         {
+            await _repository.SaveLapAsync(DateOnly.FromDateTime(DateTime.UtcNow),
+            new LapEntry(
+                DateTime.UtcNow,
+                12,
+                "20",
+                "10",
+                8,
+                100.2m));
+
+            var rand = new Random();
+            await _repository.SaveLapAsync(DateOnly.FromDateTime(DateTime.UtcNow),
+            new LapEntry(
+                DateTime.UtcNow,
+                Convert.ToInt32(rand.Next(10, 20)),
+                "20",
+                rand.Next(8, 15).ToString(),
+                rand.Next(21, 30),
+                rand.Next(100, 300) / 70m));
+            return;
+
             var response = await _http.GetAsync("https://kart-timer.com/drivers/ajax.php?p=livescreen&track=110&target=updaterace");
             response.EnsureSuccessStatusCode();
 
