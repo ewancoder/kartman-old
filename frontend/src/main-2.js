@@ -157,6 +157,7 @@ async function updateTrackConfig(sessionId) {
 
 
 async function reload() {
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for styles to load.
     element.innerHTML = '';
     let session = undefined;
     let kart = undefined;
