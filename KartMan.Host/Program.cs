@@ -35,7 +35,10 @@ app.MapGet("/api/history/today", async () =>
 {
     var history = await repository.GetHistoryForDayAsync(DateOnly.FromDateTime(DateTime.UtcNow));
 
-    return history;
+    // TODO: Order sessions descending, BUT laps ascending!
+    return history
+        .OrderByDescending(x => x.recordedAtUtc) // Show latest sessions on the top.
+        .ToList();
 });
 
 app.MapGet("/api/history/{session}/{kart}", async (int session, string kart) =>
@@ -45,7 +48,9 @@ app.MapGet("/api/history/{session}/{kart}", async (int session, string kart) =>
         .Select(x => new ShortEntry(x.lap, x.time))
         .ToList();
 
-    return history;
+    return history
+        .OrderBy(x => x.lap)
+        .ToList();
 });
 
 app.MapGet("/api/history/top10", async () =>
@@ -55,10 +60,13 @@ app.MapGet("/api/history/top10", async () =>
 
 app.MapGet("/api/history/{dateString}", async (string dateString) =>
 {
+    // TODO: Order sessions descending, BUT laps ascending!
     var date = DateTime.ParseExact(dateString, "dd-MM-yyyy", null);
     var history = await repository.GetHistoryForDayAsync(DateOnly.FromDateTime(date));
 
-    return history;
+    return history
+        .OrderByDescending(x => x.recordedAtUtc) // Show latest sessions on the top.
+        .ToList();
 });
 
 app.UseCors("Cors");
