@@ -222,6 +222,17 @@ public sealed class HistoryDataRepository
                 var command = connection.CreateCommand();
                 command.CommandText =
                 @"
+ALTER TABLE session ADD COLUMN weather_data TEXT;";
+                await command.ExecuteNonQueryAsync();
+            }
+
+            using (var connection = new SqliteConnection(DbConnectionString))
+            {
+                await connection.OpenAsync();
+
+                var command = connection.CreateCommand();
+                command.CommandText =
+                @"
 ALTER TABLE data ADD COLUMN session_id TEXT;
 CREATE INDEX idx_data_session_id ON data (session_id);";
                 await command.ExecuteNonQueryAsync();
@@ -373,7 +384,7 @@ CREATE INDEX idx_session_track_config ON session (track_config);
                                 null,
                                 null);
 
-                            await UpdateSessionInfoAsync(entry.GetSessionIdentifier(), info);
+                            await UpdateSessionInfoAsync(entry.GetSessionIdentifier(), info, JsonSerializer.Serialize(weather));
                         }
 
                         // TODO: Clear them some time like once a day.
@@ -413,7 +424,7 @@ CREATE INDEX idx_session_track_config ON session (track_config);
         _cache.Add(entry.ToComparisonEntry());
     }
 
-    public async Task UpdateSessionInfoAsync(string sessionId, SessionInfo info)
+    public async Task UpdateSessionInfoAsync(string sessionId, SessionInfo info, string weatherData = null)
     {
         if (!info.IsValid)
             throw new InvalidOperationException();
@@ -427,6 +438,13 @@ CREATE INDEX idx_session_track_config ON session (track_config);
             var cmdText = "INSERT OR IGNORE INTO session (id, ";
             var values = "VALUES ($id, ";
             command.Parameters.AddWithValue("$id", sessionId);
+
+            if (weatherData != null)
+            {
+                cmdText += "weather_data, ";
+                values += "$weatherData, ";
+                command.Parameters.AddWithValue("$weatherData", weatherData);
+            }
 
             if (info.Weather != null)
             {
