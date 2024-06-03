@@ -33,3 +33,28 @@ body {
     box-shadow: 0 3px 10px rgb(0 0 0 / 0.4);
     cursor: pointer;
 }
+
+.session-info {
+    margin-left: 30px;
+    font-size: 1.3rem;
+    color: #384;
+}
+
+td {
+    width: 150px;
+    height: 45px;
+}
+
+.interactive {
+    cursor: pointer;
+}
+
+.interactive:hover {
+    background-color: #eee;
+}
+
+.status {
+    padding: 5px;
+    width: 40px;
+    height: 40px;
+}

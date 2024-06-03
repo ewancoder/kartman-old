@@ -8,15 +8,15 @@ let isTop10 = false;
 let response = undefined;
 let json = undefined;
 
-document.getElementById('top10-btn').addEventListener('click', openTop10);
-document.getElementById('today-btn').addEventListener('click', openToday);
+//document.getElementById('top10-btn').addEventListener('click', openTop10);
+//document.getElementById('today-btn').addEventListener('click', openToday);
 await openToday();
 
 async function openTop10() {
     isTop10 = true;
     response = await fetch(`${config.historyApiUrl}/top10`);
     json = await response.json();
-    reload();
+    await reload();
 }
 
 async function openToday() {
@@ -27,10 +27,114 @@ async function openToday() {
     response = await fetch(`${config.historyApiUrl}/${date}`);
     json = await response.json();
 
-    reload();
+    await reload();
 }
 
-function reload() {
+function getWeather(weather) {
+    if (weather == 1) return icon('weather-dry');
+    if (weather == 2) return icon('weather-damp');
+    if (weather == 3) return icon('weather-wet');
+    if (weather == 4) return icon('weather-extra-wet');
+
+    return '?';
+}
+
+function icon(type) {
+    return `<img class="status" src="img/${type}.png"/>`;
+}
+
+function getSky(sky) {
+    if (sky == 1) return icon('sky-clear');
+    if (sky == 2) return icon('sky-cloudy');
+    if (sky == 3) return icon('sky-overcast');
+
+    return '?';
+}
+
+function getWind(wind) {
+    if (wind == 1) return icon('wind-no');
+    if (wind == 2) return icon('wind-yes');
+
+    return '?';
+}
+
+function getAirTemp(airTemp) {
+    if (!airTemp) return '?';
+
+    return `${airTemp} C`;
+}
+
+function getTrackTemp(trackTemp) {
+    if (!trackTemp) return '?';
+
+    return `${trackTemp} C`;
+}
+
+function getSubjectiveTrackTemp(subjectiveTrackTemp) {
+    if (subjectiveTrackTemp == 1) return icon('track-cold');
+    if (subjectiveTrackTemp == 2) return icon('track-normal');
+    if (subjectiveTrackTemp == 3) return icon('track-warm');
+    if (subjectiveTrackTemp == 4) return icon('track-hot');
+
+    return '?';
+}
+
+async function update(sessionId, key, promptText) {
+    let pr = prompt(promptText);
+    if (!pr) return;
+    const value = Number(pr);
+    var object = {};
+    object[key] = value;
+    await fetch(`${config.sessionsApiUrl}/${sessionId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(object)
+    });
+
+    return value;
+}
+
+async function updateWeather(sessionId) {
+    const response = await update(sessionId, 'weather', 'Weather: 1 - dry, 2 - damp, 3 - wet, 4 - extra wet');
+    if (!response) return null;
+
+    return getWeather(response);
+}
+
+async function updateSky(sessionId) {
+    const response = await update(sessionId, 'sky', '1 - clear, 2 - cloudy, 3 - overcast');
+    if (!response) return null;
+
+    return getSky(response);
+}
+async function updateWind(sessionId) {
+    const response = await update(sessionId, 'wind', '1 - no wind, 2 - yes');
+    if (!response) return null;
+
+    return getWind(response);
+}
+async function updateAirTemp(sessionId) {
+    const response = await update(sessionId, 'airTempC', 'Air temperature in C, for example: 25.7');
+    if (!response) return null;
+
+    return getAirTemp(response);
+}
+async function updateTrackTemp(sessionId) {
+    const response = await update(sessionId, 'trackTempC', 'Track temperature in C, for example: 50.7');
+    if (!response) return null;
+
+    return getTrackTemp(response);
+}
+async function updateSubjectiveTrackTemp(sessionId) {
+    const response = await update(sessionId, 'trackTempApproximation', '1 - Cold, 2 - Cool, 3 - Warm, 4 - Hot');
+    if (!response) return null;
+
+    return getSubjectiveTrackTemp(response);
+}
+
+async function reload() {
     element.innerHTML = '';
     let session = undefined;
     let kart = undefined;
@@ -38,6 +142,55 @@ function reload() {
     for (const e of json) {
         if (session != e.session) {
             session = e.session;
+
+            // Processing new session. Get its info and populate it.
+            let sessionData = await (await fetch(`${config.sessionsApiUrl}/${e.sessionId}`)).json();
+
+            if (!sessionData) {
+                sessionData = {};
+            }
+
+            const dataElement = document.createElement('table');
+            dataElement.classList.add('session-info');
+
+            function createInfoRow(sessionId, keyHtml, valueHtml, firstCallback, secondValue, secondCallback) {
+                const row = document.createElement('tr');
+                const key = document.createElement('td');
+                const value = document.createElement('td');
+                value.addEventListener('click', async function (e) {
+                    if (firstCallback) {
+                        let newHtml = await firstCallback(sessionId);
+                        if (newHtml) value.innerHTML = newHtml;
+                    }
+                });
+                value.classList.add('interactive');
+                row.appendChild(key);
+                row.appendChild(value);
+                dataElement.appendChild(row);
+                key.innerHTML = keyHtml;
+                value.innerHTML = valueHtml;
+
+                if (secondValue) {
+                    const secondValueElement = document.createElement('td');
+                    row.appendChild(secondValueElement);
+                    secondValueElement.classList.add('interactive');
+                    secondValueElement.innerHTML = secondValue;
+                    secondValueElement.addEventListener('click', async function (e) {
+                        if (secondCallback) {
+                            let newHtml = await secondCallback(sessionId);
+                            if (newHtml) secondValueElement.innerHTML = newHtml;
+                        }
+                    });
+                }
+            }
+
+            createInfoRow(e.sessionId, 'Weather', getWeather(sessionData.weather), updateWeather);
+
+            createInfoRow(e.sessionId, 'Sky', getSky(sessionData.sky), updateSky);
+            createInfoRow(e.sessionId, 'Wind', getWind(sessionData.wind), updateWind);
+            createInfoRow(e.sessionId, 'Air Temp', getAirTemp(sessionData.airTempC), updateAirTemp);
+            createInfoRow(e.sessionId, 'Track Temp', getTrackTemp(sessionData.trackTempC), updateTrackTemp, getSubjectiveTrackTemp(sessionData.trackTempApproximation), updateSubjectiveTrackTemp);
+
             kart = undefined;
             if (fastest) fastest.lapLine.classList.add('fastest');
             fastest = undefined;
@@ -49,6 +202,7 @@ function reload() {
             }
             sessionHeader.classList.add('session-header');
             element.appendChild(sessionHeader);
+            element.appendChild(dataElement);
         }
 
         if (kart != e.kart) {

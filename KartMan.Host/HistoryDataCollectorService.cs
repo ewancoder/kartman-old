@@ -22,6 +22,8 @@ public sealed record LapEntry(
     {
         return $"{DateOnly.FromDateTime(recordedAtUtc).DayNumber}-{session}";
     }
+
+    public string SessionId => GetSessionIdentifier();
 }
 
 public sealed record RawJson(
