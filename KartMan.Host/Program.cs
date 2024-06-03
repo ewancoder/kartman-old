@@ -94,14 +94,23 @@ public enum TrackTemp
     Hot
 }
 
+public enum TrackConfig
+{
+    Short = 1,
+    Long,
+    ShortReverse,
+    LongReverse
+}
+
 public record SessionInfo(
     Weather? Weather,
     Sky? Sky,
     Wind? Wind,
     decimal? AirTempC,
     decimal? TrackTempC,
-    TrackTemp? TrackTempApproximation)
+    TrackTemp? TrackTempApproximation,
+    TrackConfig? TrackConfig)
 {
     public bool IsValid => Weather != null || Sky != null || Wind != null || AirTempC != null || TrackTempC != null
-        || TrackTempApproximation != null;
+        || TrackTempApproximation != null || TrackConfig != null;
 }

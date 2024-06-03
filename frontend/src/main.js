@@ -40,6 +40,11 @@ function getWeather(weather) {
 }
 
 function icon(type) {
+    if (type == 'track-config-short') return 'Short';
+    if (type == 'track-config-long') return 'Long';
+    if (type == 'track-config-short-reverse') return 'Short Reverse';
+    if (type == 'track-config-long-reverse') return 'Long Reverse';
+
     return `<img class="status" src="img/${type}.png"/>`;
 }
 
@@ -75,6 +80,15 @@ function getSubjectiveTrackTemp(subjectiveTrackTemp) {
     if (subjectiveTrackTemp == 2) return icon('track-normal');
     if (subjectiveTrackTemp == 3) return icon('track-warm');
     if (subjectiveTrackTemp == 4) return icon('track-hot');
+
+    return '?';
+}
+
+function getTrackConfig(subjectiveTrackTemp) {
+    if (subjectiveTrackTemp == 1) return icon('track-config-short');
+    if (subjectiveTrackTemp == 2) return icon('track-config-long');
+    if (subjectiveTrackTemp == 3) return icon('track-config-short-reverse');
+    if (subjectiveTrackTemp == 4) return icon('track-config-long-reverse');
 
     return '?';
 }
@@ -133,6 +147,14 @@ async function updateSubjectiveTrackTemp(sessionId) {
 
     return getSubjectiveTrackTemp(response);
 }
+async function updateTrackConfig(sessionId) {
+    const response = await update(sessionId, 'trackConfig', '1 - Short, 2 - Long, 3 - Short Reverse, 4 - Long Reverse');
+    if (!response) return null;
+
+    return getTrackConfig(response);
+}
+
+
 
 async function reload() {
     element.innerHTML = '';
@@ -184,8 +206,8 @@ async function reload() {
                 }
             }
 
+            createInfoRow(e.sessionId, 'Track Config', getTrackConfig(sessionData.trackConfig), updateTrackConfig);
             createInfoRow(e.sessionId, 'Weather', getWeather(sessionData.weather), updateWeather);
-
             createInfoRow(e.sessionId, 'Sky', getSky(sessionData.sky), updateSky);
             createInfoRow(e.sessionId, 'Wind', getWind(sessionData.wind), updateWind);
             createInfoRow(e.sessionId, 'Air Temp', getAirTemp(sessionData.airTempC), updateAirTemp);

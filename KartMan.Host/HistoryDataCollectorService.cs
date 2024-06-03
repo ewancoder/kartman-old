@@ -70,7 +70,8 @@ CREATE TABLE session (
     wind INTEGER,
     air_temp decimal(6,3),
     track_temp decimal(6,3),
-    track_temp_approximation INTEGER);
+    track_temp_approximation INTEGER,
+    track_config INTEGER);
 
 CREATE UNIQUE INDEX idx_session_id ON session (id);
 CREATE INDEX idx_session_weather ON session (weather);
@@ -79,6 +80,7 @@ CREATE INDEX idx_session_wind ON session (wind);
 CREATE INDEX idx_session_air_temp ON session (air_temp);
 CREATE INDEX idx_session_track_temp ON session (track_temp);
 CREATE INDEX idx_session_track_temp_approximation ON session (track_temp_approximation);
+CREATE INDEX idx_session_track_config ON session (track_config);
 ";
                 await command.ExecuteNonQueryAsync();
             }
@@ -258,6 +260,13 @@ CREATE INDEX idx_session_track_temp_approximation ON session (track_temp_approxi
                 command.Parameters.AddWithValue("$trackTempApproximation", info.TrackTempApproximation);
             }
 
+            if (info.TrackConfig != null)
+            {
+                cmdText += "track_config, ";
+                values += "$trackConfig, ";
+                command.Parameters.AddWithValue("$trackConfig", info.TrackConfig);
+            }
+
             cmdText = $"{cmdText[..^2]}) {values[..^2]});";
 
             command.CommandText = cmdText;
@@ -309,6 +318,12 @@ CREATE INDEX idx_session_track_temp_approximation ON session (track_temp_approxi
                 command.Parameters.AddWithValue("$trackTempApproximation", info.TrackTempApproximation);
             }
 
+            if (info.TrackConfig != null)
+            {
+                cmdText += "track_config = $trackConfig, ";
+                command.Parameters.AddWithValue("$trackConfig", info.TrackConfig);
+            }
+
             cmdText = $"{cmdText[..^2]} WHERE id = $id;";
 
             command.CommandText = cmdText;
@@ -328,7 +343,7 @@ CREATE INDEX idx_session_track_temp_approximation ON session (track_temp_approxi
             var command = connection.CreateCommand();
             command.CommandText =
             @"
-                SELECT id, weather, sky, wind, air_temp, track_temp, track_temp_approximation
+                SELECT id, weather, sky, wind, air_temp, track_temp, track_temp_approximation, track_config
                 FROM session
                 WHERE id = $id
             ";
@@ -345,9 +360,10 @@ CREATE INDEX idx_session_track_temp_approximation ON session (track_temp_approxi
                     decimal? airTemp = reader.IsDBNull(4) ? null : reader.GetDecimal(4);
                     decimal? trackTemp = reader.IsDBNull(5) ? null : reader.GetDecimal(5);
                     TrackTemp? trackTempApproximation = reader.IsDBNull(6) ? null : (TrackTemp)reader.GetInt32(6);
+                    TrackConfig? trackConfig = reader.IsDBNull(7) ? null : (TrackConfig)reader.GetInt32(7);
 
                     return new SessionInfo(weather, sky, wind, airTemp, trackTemp,
-                        trackTempApproximation);
+                        trackTempApproximation, trackConfig);
                 }
             }
 
