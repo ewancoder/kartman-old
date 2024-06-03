@@ -5,6 +5,169 @@ using Microsoft.Data.Sqlite;
 
 namespace KartMan.Host;
 
+public interface IWeatherStore
+{
+    ValueTask StoreAsync(WeatherData data);
+    ValueTask<WeatherData> GetWeatherForAsync(DateTime timestampUtc);
+}
+
+public sealed class WeatherStore : IWeatherStore
+{
+    private Dictionary<DateTime, WeatherData> _data = new Dictionary<DateTime, WeatherData>();
+    private readonly object _lock = new object();
+
+    public ValueTask StoreAsync(WeatherData data)
+    {
+        if (_data.Count > 20000)
+        {
+            lock (_lock)
+            {
+                if (_data.Count > 20000)
+                    _data = _data.TakeLast(10000)
+                        .ToDictionary();
+            }
+        }
+
+        _data.Add(data.TimestampUtc, data);
+        return default;
+    }
+
+    public ValueTask<WeatherData> GetWeatherForAsync(DateTime timestampUtc)
+    {
+        return new(_data.Values.OrderByDescending(x => x.TimestampUtc).FirstOrDefault(x => x.TimestampUtc < timestampUtc));
+    }
+}
+
+public sealed class WeatherGatherer
+{
+    private readonly WeatherRetriever _retriever;
+    private readonly IWeatherStore _store;
+    private WeatherData _lastData;
+    private Task _gathering;
+
+    public WeatherGatherer(
+        IConfiguration configuration,
+        IWeatherStore store)
+    {
+        _retriever = new WeatherRetriever(configuration["WeatherApiKey"]);
+        _store = store;
+        _gathering = Gather();
+     }
+
+    private async Task Gather()
+    {
+        while (true)
+        {
+            try
+            {
+                var data = await _retriever.GetWeatherAsync();
+
+                if (_lastData == null || _lastData.ToComparison() != data.ToComparison())
+                {
+                    await _store.StoreAsync(data);
+                    _lastData = data;
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                await Task.Delay(TimeSpan.FromMinutes(1));
+            }
+        }
+    }
+}
+
+public sealed record RawWeatherData(
+    RawCurrent current);
+public sealed record RawCondition(
+    int code,
+    string text);
+public sealed record RawCurrent(
+    decimal temp_c,
+    int is_day,
+    RawCondition condition,
+    decimal wind_kph,
+    decimal wind_degree,
+    decimal pressure_mb,
+    decimal precip_mm,
+    decimal humidity,
+    decimal cloud,
+    decimal feelslike_c,
+    decimal dewpoint_c);
+
+public sealed record WeatherData(
+    DateTime TimestampUtc,
+    decimal TempC,
+    bool IsDay,
+    int ConditionCode,
+    string ConditionText,
+    decimal WindKph,
+    decimal WindDegree,
+    decimal PressureMb,
+    decimal PrecipitationMm,
+    decimal Humidity,
+    decimal Cloud,
+    decimal FeelsLikeC,
+    decimal DewPointC)
+{
+    public WeatherComparison ToComparison()
+    {
+        return new(
+            TempC, IsDay, ConditionCode, WindKph, WindDegree, PressureMb, PrecipitationMm, Humidity, Cloud, FeelsLikeC, DewPointC);
+    }
+}
+
+public sealed record WeatherComparison(
+    decimal TempC,
+    bool IsDay,
+    int ConditionCode,
+    decimal WindKph,
+    decimal WindDegree,
+    decimal PressureMb,
+    decimal PrecipitationMb,
+    decimal Humidity,
+    decimal Cloud,
+    decimal FeelsLikeC,
+    decimal DewPointC);
+
+public sealed class WeatherRetriever
+{
+    private readonly string _apiKey;
+    private readonly HttpClient _client = new HttpClient();
+
+    public WeatherRetriever(string apiKey)
+    {
+        _apiKey = apiKey;
+    }
+
+    public async Task<WeatherData> GetWeatherAsync()
+    {
+        // TODO: Use httpclient factory.
+        var response = await _client.GetAsync($"https://api.weatherapi.com/v1/current.json?key={_apiKey}&q=Batumi");
+        response.EnsureSuccessStatusCode();
+
+        var content = await response.Content.ReadAsStringAsync();
+        var raw = JsonSerializer.Deserialize<RawWeatherData>(content);
+
+        return new WeatherData(
+            DateTime.UtcNow,
+            raw.current.temp_c,
+            raw.current.is_day == 1,
+            raw.current.condition.code,
+            raw.current.condition.text,
+            raw.current.wind_kph,
+            raw.current.wind_degree,
+            raw.current.pressure_mb,
+            raw.current.precip_mm,
+            raw.current.humidity,
+            raw.current.cloud,
+            raw.current.feelslike_c,
+            raw.current.dewpoint_c);
+    }
+}
+
 public sealed record ShortEntry(
     int lap, decimal time);
 
@@ -39,6 +202,14 @@ public sealed class HistoryDataRepository
     private const string DbConnectionString = "Data Source=data.db";
     public const decimal FastestAllowedTime = 0; // This setting is futile, there will always be skewed times.
     private readonly HashSet<ComparisonEntry> _cache = new HashSet<ComparisonEntry>();
+    private readonly IWeatherStore _weatherStore;
+    private readonly HashSet<string> _savedSessions = new HashSet<string>();
+    private readonly SemaphoreSlim _lock = new SemaphoreSlim(1, 1);
+
+    public HistoryDataRepository(IWeatherStore weatherStore)
+    {
+        _weatherStore = weatherStore;
+    }
 
     public async Task UpdateDatabaseAsync()
     {
@@ -178,6 +349,41 @@ CREATE INDEX idx_session_track_config ON session (track_config);
 
         if (_cache.Contains(entry.ToComparisonEntry()))
             return;
+
+        if (!_savedSessions.Contains(entry.GetSessionIdentifier()))
+        {
+            await _lock.WaitAsync();
+            try
+            {
+                if (!_savedSessions.Contains(entry.GetSessionIdentifier()))
+                {
+                    var weather = await _weatherStore.GetWeatherForAsync(entry.recordedAtUtc);
+                    if (weather != null)
+                    {
+                        var info = new SessionInfo(
+                            weather.PrecipitationMm > 2 ? Weather.Wet : (
+                                weather.PrecipitationMm > 1 ? Weather.Damp : Weather.Dry),
+                            weather.Cloud < 15 ? Sky.Clear : (
+                                weather.Cloud < 70 ? Sky.Cloudy : Sky.Overcast),
+                            weather.WindKph < 15 ? Wind.NoWind : Wind.Yes,
+                            weather.TempC,
+                            null,
+                            null,
+                            null);
+
+                        await UpdateSessionInfoAsync(entry.GetSessionIdentifier(), info);
+                    }
+
+                    // TODO: Clear them some time like once a day.
+                    // Mark it as saved even when no weather data is available. Can't do anything for older sessions.
+                    _savedSessions.Add(entry.GetSessionIdentifier());
+                }
+            }
+            finally
+            {
+                _lock.Release();
+            }
+        }
 
         using (var connection = new SqliteConnection(DbConnectionString))
         {
@@ -369,7 +575,6 @@ CREATE INDEX idx_session_track_config ON session (track_config);
 
             return null;
         }
-
     }
 }
 

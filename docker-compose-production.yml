@@ -16,6 +16,9 @@ services:
     mem_reservation: 750m
     volumes:
       - ./prod-data.db:/app/data.db
+      - ./prod-weather.db:/app/weather.db
+    env:
+      - secrets.env
 
   kartman-ui:
     image: ${DOCKER_REGISTRY-}kartman-ui

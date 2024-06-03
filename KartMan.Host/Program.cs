@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 var builder = WebApplication.CreateBuilder();
 builder.Services.AddHostedService<HistoryDataCollectorService>();
 builder.Services.AddSingleton<HistoryDataRepository>();
+builder.Services.AddSingleton<WeatherGatherer>();
+builder.Services.AddSingleton<IWeatherStore, WeatherStore>();
 
 builder.Services.AddCors(x =>
 {
@@ -15,6 +17,8 @@ builder.Services.AddCors(x =>
 });
 
 var app = builder.Build();
+
+app.Services.GetRequiredService<WeatherGatherer>();
 
 var repository = app.Services.GetRequiredService<HistoryDataRepository>();
 await repository.UpdateDatabaseAsync();
