@@ -40,9 +40,12 @@ app.MapGet("/api/history/today", async () =>
     var history = await repository.GetHistoryForDayAsync(DateOnly.FromDateTime(DateTime.UtcNow));
 
     return history
-        .OrderByDescending(x => x.session) // Show latest sessions on top.
-        .ThenBy(x => x.kart)
-        .ThenBy(x => x.lap)
+        .GroupBy(x => x.session)
+        .OrderByDescending(g => g.Max(x => x.recordedAtUtc))
+        .Select(x => x
+            .OrderBy(y => y.kart)
+            .ThenBy(y => y.lap))
+        .SelectMany(x => x)
         .ToList();
 });
 
@@ -69,9 +72,12 @@ app.MapGet("/api/history/{dateString}", async (string dateString) =>
     var history = await repository.GetHistoryForDayAsync(DateOnly.FromDateTime(date));
 
     return history
-        .OrderByDescending(x => x.session) // Show latest sessions on top.
-        .ThenBy(x => x.kart)
-        .ThenBy(x => x.lap)
+        .GroupBy(x => x.session)
+        .OrderByDescending(g => g.Max(x => x.recordedAtUtc))
+        .Select(x => x
+            .OrderBy(y => y.kart)
+            .ThenBy(y => y.lap))
+        .SelectMany(x => x)
         .ToList();
 });
 
