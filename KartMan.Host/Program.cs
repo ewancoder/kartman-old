@@ -2,10 +2,11 @@ using KartMan.Host;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 
 var builder = WebApplication.CreateBuilder();
-builder.Services.AddHostedService<HistoryDataCollectorService>();
+builder.Services.AddSingleton<HistoryDataCollectorService>();
 builder.Services.AddSingleton<HistoryDataRepository>();
 builder.Services.AddSingleton<WeatherGatherer>();
 builder.Services.AddSingleton<IWeatherStore, WeatherStore>();
+builder.Services.AddHostedService<HistoryDataCollectorService>(x => x.GetRequiredService<HistoryDataCollectorService>());
 
 builder.Services.AddCors(x =>
 {
@@ -22,6 +23,12 @@ app.Services.GetRequiredService<WeatherGatherer>();
 
 var repository = app.Services.GetRequiredService<HistoryDataRepository>();
 await repository.UpdateDatabaseAsync();
+var s = app.Services.GetRequiredService<HistoryDataCollectorService>();
+
+app.MapGet("/api/jsons", () =>
+{
+    return s._jsons;
+});
 
 app.MapPut("/api/sessions/{session}", async (string session, SessionInfo info) =>
 {

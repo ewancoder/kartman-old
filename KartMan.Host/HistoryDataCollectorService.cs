@@ -603,6 +603,8 @@ CREATE INDEX idx_session_track_config ON session (track_config);
 public sealed record ComparisonEntry(DateOnly day, int session, string kart, int lap);
 public sealed class HistoryDataCollectorService : IHostedService
 {
+    public List<RawJson> _jsons = new List<RawJson>();
+
     private bool _isRunning = true;
     private Task _gatheringData;
     private readonly HistoryDataRepository _repository;
@@ -677,6 +679,8 @@ public sealed class HistoryDataCollectorService : IHostedService
             if (_dayEnded) _dayEnded = false;
 
             _lastSession = rawJson.headinfo.number;
+
+            _jsons.Add(rawJson);
 
             var entries = rawJson.results.Select(x =>
             {
