@@ -1,5 +1,6 @@
 using KartMan.Host;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using System.Security.AccessControl;
 
 var builder = WebApplication.CreateBuilder();
 builder.Services.AddSingleton<HistoryDataCollectorService>();
@@ -88,9 +89,67 @@ app.MapGet("/api/history/{dateString}", async (string dateString) =>
         .ToList();
 });
 
+app.MapGet("/api/sessions-ng/{dateString}", async (string dateString) =>
+{
+    var date = dateString == "today"
+        ? DateTime.UtcNow
+        : DateTime.ParseExact(dateString, "dd-MM-yyyy", null);
+
+    var history = await repository.GetHistoryForDayAsync(DateOnly.FromDateTime(date));
+
+    var sessions = history
+        .GroupBy(x => x.SessionId)
+        .Select(x => x.OrderBy(s => s.recordedAtUtc).First())
+        .Select(x => new { x.SessionId, SessionStartTime = x.recordedAtUtc })
+        .ToList();
+
+    var infos = new List<SessionInfoNg>();
+    foreach (var session in sessions)
+    {
+        var sessionInfo = await repository.GetSessionInfoAsync(session.SessionId);
+
+        infos.Add(new SessionInfoNg(
+            session.SessionId,
+            $"Session {session.SessionId}",
+            session.SessionStartTime,
+            new WeatherInfoNg(
+                sessionInfo.AirTempC)));
+    }
+
+    return infos;
+});
+
+app.MapGet("/api/history-ng/{sessionId}", async (string sessionId) =>
+{
+    var history = await repository.GetHistoryForSessionAsync(sessionId);
+
+    return history
+        .GroupBy(x => x.kart)
+        .Select(g => new
+        {
+            Kart = g.First().kart,
+            KartName = g.First().kart,
+            Laps = g.Select(l => new
+            {
+                LapNumber = l.lap,
+                LapTime = l.time
+            }).OrderBy(x => x.LapNumber).ToList()
+        })
+        .ToList();
+});
+
 app.UseCors("Cors");
 
 await app.RunAsync();
+
+public record SessionInfoNg(
+    string SessionId,
+    string Name,
+    DateTime StartedAt,
+    WeatherInfoNg WeatherInfo);
+
+public record WeatherInfoNg(
+    decimal? AirTempC);
 
 public enum Weather
 {

@@ -598,6 +598,47 @@ CREATE INDEX idx_session_track_config ON session (track_config);
             return null;
         }
     }
+
+    public async Task<List<LapEntry>> GetHistoryForSessionAsync(string sessionId)
+    {
+        using (var connection = new SqliteConnection(DbConnectionString))
+        {
+            await connection.OpenAsync();
+
+            var command = connection.CreateCommand();
+            command.CommandText =
+            @"
+                SELECT day, recorded_at_utc, session, total_length, kart, lap, time
+                FROM data
+                WHERE session = $sessionId
+            ";
+            command.Parameters.AddWithValue("$sessionId", sessionId);
+
+            var list = new List<LapEntry>();
+            using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    var recordedAtUtc = reader.GetDateTime(1);
+                    var session = reader.GetInt32(2);
+                    var totalLength = reader.GetString(3);
+                    var kart = reader.GetString(4);
+                    var lap = reader.GetInt32(5);
+                    var time = reader.GetDecimal(6);
+
+                    list.Add(new LapEntry(
+                        recordedAtUtc,
+                        session,
+                        totalLength,
+                        kart,
+                        lap,
+                        time));
+                }
+            }
+
+            return list;
+        }
+    }
 }
 
 public sealed record ComparisonEntry(DateOnly day, int session, string kart, int lap);
